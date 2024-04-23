@@ -44,8 +44,8 @@ class AudioSlicer:
 
 def prepare_slices(clip_length_sec, overlay_sec, sample_rate):
     # Usage
-    directory = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Codes\\MusicData\\Wav"
-    output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Codes\\MusicData\\Clips"
+    directory = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Wav"
+    output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
     FolderHandlers.clean_folder(output_folder)
     wav_files = FolderHandlers.import_wav_files(directory)
 
@@ -61,7 +61,7 @@ def length_of_a_clip(path):
             return len(audio)
 
 def return_slices(percentage):
-    output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Codes\\MusicData\\Clips"
+    output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
     number_of_wavs = FolderHandlers.count_wavs_in_folder(output_folder)
     wavs = []
     for file in os.listdir(output_folder):
