@@ -36,5 +36,4 @@ history = transformer_model.fit(quantised_train_data, quantised_train_labels, ep
 
 # Save the model
 folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\PythonCode\\FittedModel\\"
-
-transformer_model.save('C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\PythonCode\\FittedModel\\model')
+FolderHandlers.save_model_with_version(model=transformer_model, directory= folder, base_filename="fitted_model")
