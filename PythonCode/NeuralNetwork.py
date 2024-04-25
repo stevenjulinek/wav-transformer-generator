@@ -31,6 +31,6 @@ def transformer_model(ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
     for _ in range(nlayers):
         x = TransformerBlock(ninp, nhead, nhid, dropout)(x)
 
-    outputs = layers.Dense(ntoken)(x)
+    outputs = layers.Dense(ninp)(x)
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
