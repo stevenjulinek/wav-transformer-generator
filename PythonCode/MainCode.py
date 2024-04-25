@@ -12,7 +12,7 @@ output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work
 # Prepare training data
 train_data = WavHandler.return_slices(percentage=100)
 # Quantise the waveform values into 256 discrete values
-quantised_train_data = np.digitize(train_data, np.linspace(-1.0, 1.0, 256)) - 1
+quantised_train_data = np.digitize(train_data, np.linspace(-1.0, 1.0, 1024)) - 1
 # Shift the data by one timestep for labels
 # Remove the last sample in train_data and the first sample in train_labels
 quantised_train_labels = quantised_train_data[1:]
