@@ -11,13 +11,15 @@ output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work
 
 # Prepare training data
 train_data = WavHandler.return_slices(percentage=100)
+# Quantise the waveform values into 256 discrete values
+quantised_train_data = np.digitize(train_data, np.linspace(-1.0, 1.0, 256)) - 1
 # Shift the data by one timestep for labels
 # Remove the last sample in train_data and the first sample in train_labels
-train_labels = train_data[1:]
-train_data = train_data[:-1]
+quantised_train_labels = quantised_train_data[1:]
+quantised_train_data = quantised_train_data[:-1]
 
 
-ntoken = len(train_data)
+ntoken = len(quantised_train_data)
 ninp = WavHandler.length_of_a_clip(output_folder)
 hidden_layer_constant = 3
 embed_dim = 1024
@@ -26,8 +28,13 @@ transformer_model = NeuralNetwork.transformer_model(ntoken, ninp, 16, hidden_lay
 transformer_model.compile(optimizer='adam', loss='mse')
 
 # Convert your data to TensorFlow tensors
-train_data = tf.convert_to_tensor(train_data, dtype=tf.float32)
-train_labels = tf.convert_to_tensor(train_labels, dtype=tf.float32)
+train_data = tf.convert_to_tensor(quantised_train_data)
+train_labels = tf.convert_to_tensor(quantised_train_labels)
 
 # Fit the model
-history = transformer_model.fit(train_data, train_labels, epochs=10, batch_size=4)
+history = transformer_model.fit(quantised_train_data, quantised_train_labels, epochs=10, batch_size=4)
+
+# Save the model
+folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\PythonCode\\FittedModel\\"
+
+transformer_model.save('C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\PythonCode\\FittedModel\\model')

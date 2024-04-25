@@ -31,6 +31,7 @@ def transformer_model(ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
     for _ in range(nlayers):
         x = TransformerBlock(ninp, nhead, nhid, dropout)(x)
 
+    x = layers.GlobalAveragePooling1D()(x)
     outputs = layers.Dense(ninp)(x)
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model
