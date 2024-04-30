@@ -71,3 +71,11 @@ def return_slices(percentage):
             break
 
     return wavs
+
+def create_dequantised_output(quantised_sequence, directory, file_name, num_bins=1024, sample_rate = 24000):
+    """Dequantise a sequence."""
+    # Convert the quantised values back to the range [-1.0, 1.0]
+    dequantised_sequence = (quantised_sequence / (num_bins - 1)) * 2.0 - 1.0
+
+    # Save the dequantised sequence as a .wav file
+    sf.write(f'{directory}\\{file_name}.wav', dequantised_sequence.flatten(), samplerate=sample_rate)

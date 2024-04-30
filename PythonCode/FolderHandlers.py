@@ -1,4 +1,5 @@
 import shutil
+import tensorflow as tf
 import os
 
 
@@ -70,3 +71,16 @@ def save_model_with_version(model, base_filename, directory):
     # Save the model with the next version number
     model.save(directory / f"{base_filename}_v{next_version}")
 
+def get_latest_model(base_filename, directory):
+    # Convert the directory to a Path object to handle long paths
+    directory = pathlib.Path(directory)
+
+    # Find the highest existing version number
+    highest_version = 0
+    for filename in directory.iterdir():
+        if filename.name.startswith(base_filename):
+            version = filename.name.rsplit('_v', 1)[-1]
+            if version.isdigit():
+                highest_version = max(highest_version, int(version))
+
+    return tf.keras.models.load_model(directory / f"{base_filename}_v{highest_version}")
