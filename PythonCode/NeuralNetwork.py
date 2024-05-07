@@ -3,6 +3,9 @@ import time
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
+from tqdm import tqdm
+
+import FolderHandlers
 
 
 class TransformerBlock(layers.Layer):
@@ -43,16 +46,19 @@ def transformer_model(ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
 
 def generate_sequence(model, start_sequence, length, lookback):
     """Generate a sequence using a model's predictions."""
+    print("Generating sequence.")
+
     # Starting timer for the generation
     start_time = time.time()
 
-    # Start with the initial sequence
-    sequence = start_sequence
+    sequence = start_sequence[-lookback:]
+    # Convert the sequence list to a numpy array
+    sequence = np.array(sequence)
 
     # Generate the desired number of outputs
-    for _ in range(length):
+    for _ in tqdm(range(length), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):
         # Make a prediction based on the current sequence
-        prediction = model.predict(sequence)
+        prediction = model.predict(sequence, verbose=0, batch_size=1)
 
         # Convert the prediction to integer
         prediction = prediction.astype(int)
@@ -72,3 +78,18 @@ def generate_sequence(model, start_sequence, length, lookback):
     print("Time taken for generation: %s seconds" % (time.time() - start_time))
 
     return sequence[-length:]
+
+def save_training_plot(history, model_folder, do_show=False):
+    import matplotlib.pyplot as plt
+    # Plot the training loss
+    plt.plot(history['loss'])
+    plt.title('Model loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train'], loc='upper left')
+    if do_show:
+        plt.show()
+
+    # Save the plot
+    next_version = FolderHandlers.find_highest_version(base_filename="loss_plot", directory=model_folder) + 1
+    plt.savefig(model_folder + 'loss_plot_' + str(next_version) + '.png')
