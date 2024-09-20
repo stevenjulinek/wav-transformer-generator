@@ -1,5 +1,5 @@
 import shutil
-import tensorflow as tf
+import torch
 import os
 
 
@@ -69,7 +69,7 @@ def save_model_with_version(model, base_filename, directory):
     next_version = highest_version + 1
 
     # Save the model with the next version number
-    model.save(directory / f"{base_filename}_v{next_version}")
+    torch.save(model.state_dict(), directory / f"{base_filename}_v{next_version}.pth")
 
 def get_latest_model(base_filename, directory):
     # Convert the directory to a Path object to handle long paths
@@ -98,3 +98,13 @@ def find_highest_version(base_filename, directory):
                 highest_version = max(highest_version, int(version))
 
     return highest_version
+
+def data_chunk_generator(data_generator, chunk_size):
+    data_chunk = []
+    for data in data_generator:
+        data_chunk.append(data)
+        if len(data_chunk) == chunk_size:
+            yield data_chunk
+            data_chunk = []
+    if data_chunk:
+        yield data_chunk

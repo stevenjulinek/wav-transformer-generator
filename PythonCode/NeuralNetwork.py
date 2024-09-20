@@ -1,50 +1,53 @@
 import time
 
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras import layers
 from tqdm import tqdm
 
 import FolderHandlers
 
 
-class TransformerBlock(layers.Layer):
-    def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
+import torch
+from torch import nn
+from torch.nn import functional as F
+
+class TransformerBlock(nn.Module):
+    def __init__(self, embed_dim, num_heads, ff_dim, rate=0.2):
         super(TransformerBlock, self).__init__()
-        self.att = layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
-        self.ffn = tf.keras.Sequential(
-            [layers.Dense(ff_dim, activation="sigmoid"), layers.Dense(embed_dim), ]
+        self.att = nn.MultiheadAttention(embed_dim, num_heads)
+        self.ffn = nn.Sequential(
+            nn.Linear(embed_dim, ff_dim),
+            nn.ReLU(),
+            nn.Linear(ff_dim, embed_dim),
         )
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
-        self.dropout1 = layers.Dropout(rate)
-        self.dropout2 = layers.Dropout(rate)
+        self.layernorm1 = nn.LayerNorm(embed_dim)
+        self.layernorm2 = nn.LayerNorm(embed_dim)
+        self.dropout1 = nn.Dropout(rate)
+        self.dropout2 = nn.Dropout(rate)
 
-    def call(self, inputs, training):
-        attn_output = self.att(inputs, inputs)
-        attn_output = self.dropout1(attn_output, training=training)
-        out1 = self.layernorm1(inputs + attn_output)
+    def forward(self, inputs):
+        attn_output, _ = self.att(inputs, inputs, inputs)
+        out1 = self.layernorm1(inputs + self.dropout1(attn_output))
         ffn_output = self.ffn(out1)
-        ffn_output = self.dropout2(ffn_output, training=training)
-        return self.layernorm2(out1 + ffn_output)
+        return self.layernorm2(out1 + self.dropout2(ffn_output))
+
+class transformer_model(nn.Module):
+    def __init__(self, ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
+        super(transformer_model, self).__init__()
+        self.embedding = nn.Embedding(ntoken, ninp)
+        self.transformer_blocks = nn.ModuleList([TransformerBlock(ninp, nhead, nhid, dropout) for _ in range(nlayers)])
+        self.avg_pooling = nn.AdaptiveAvgPool1d(1)
+        self.output = nn.Linear(nhid, ninp)
+
+    def forward(self, x):
+        x = self.embedding(x)
+        for transformer_block in self.transformer_blocks:
+            x = transformer_block(x)
+        x = self.avg_pooling(x)
+        x = self.output(x)
+        return x[:, -240:]  # return only the last 240 samples
 
 
-# Define the model
-def transformer_model(ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
-    inputs = layers.Input(shape=(None,))
-    x = layers.Embedding(ntoken, ninp)(inputs)
-
-    # Use the TransformerBlock here
-    for _ in range(nlayers):
-        x = TransformerBlock(ninp, nhead, nhid, dropout)(x)
-
-    x = layers.GlobalAveragePooling1D()(x)
-    outputs = layers.Dense(ninp)(x)
-    model = tf.keras.Model(inputs=inputs, outputs=outputs)
-    return model
-
-
-def generate_sequence(model, start_sequence, length, lookback):
+def generate_sequence(model, start_sequence, length, lookback, vae_model):
     """Generate a sequence using a model's predictions."""
     print("Generating sequence.")
 
@@ -58,12 +61,12 @@ def generate_sequence(model, start_sequence, length, lookback):
     # Generate the desired number of outputs
     for _ in tqdm(range(length), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):
         # Make a prediction based on the current sequence
-        prediction = model.predict(sequence, verbose=0, batch_size=1)
+        prediction = model(sequence, verbose=0, batch_size=1)
 
         # Convert the prediction to integer
         prediction = prediction.astype(int)
 
-        prediction = tf.convert_to_tensor(prediction)
+        prediction = torch.tensor(prediction)
 
         # Reshape the last prediction to a 1D array with a single element
         prediction = np.reshape(prediction[-1], (1, 240))
@@ -74,10 +77,13 @@ def generate_sequence(model, start_sequence, length, lookback):
         # Use only the last part of the sequence for the next input
         sequence = sequence[-lookback:]
 
+    # Decode the generated sequence using the VAE
+    decoded_sequence = vae_model.decode(sequence)
+
     # Print the time taken for the generation
     print("Time taken for generation: %s seconds" % (time.time() - start_time))
 
-    return sequence[-length:]
+    return decoded_sequence[-length:]
 
 def save_training_plot(history, model_folder, do_show=False):
     import matplotlib.pyplot as plt

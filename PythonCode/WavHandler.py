@@ -103,6 +103,32 @@ def load_quantised_samples_generator(percentage):
 
         yield quantised_current_audio, quantised_next_audio
 
+def load_unquantised_samples_generator(percentage):
+    print("Loading training data.")
+    output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
+    number_of_wavs = FolderHandlers.count_wavs_in_folder(output_folder)
+    num_samples = int(percentage/100*number_of_wavs)
+
+    files = os.listdir(output_folder)
+    for i in tqdm(range(num_samples - 1), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):  # subtract 1 to avoid index out of range for next file
+        current_file = files[i]
+        next_file = files[i + 1]
+
+        current_audio = librosa.load(f"{output_folder}\\{current_file}", sr=24000)[0]
+        next_audio = librosa.load(f"{output_folder}\\{next_file}", sr=24000)[0]
+
+        # Normalize the values to the [0, 1] range
+        if np.nanmax(current_audio) == np.nanmin(current_audio):
+            current_audio = current_audio.clip(0, 1)
+        else:
+            current_audio = (current_audio - np.nanmin(current_audio)) / (np.nanmax(current_audio) - np.nanmin(current_audio))
+        if np.nanmax(next_audio) == np.nanmin(next_audio):
+            next_audio = next_audio.clip(0, 1)
+        else:
+            next_audio = (next_audio - np.nanmin(next_audio)) / (np.nanmax(next_audio) - np.nanmin(next_audio))
+
+        yield current_audio, next_audio
+
 def load_quantised_samples(percentage):
     print("Loading data.")
     output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
