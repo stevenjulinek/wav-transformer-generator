@@ -1,30 +1,40 @@
 import platform
-#set 1 when debugging
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = "0"
 
+import numpy as np
+
+os.environ['CUDA_LAUNCH_BLOCKING'] = "0"  # Set to "1" to debug CUDA errors
+
+import VAEEngine
 import FolderHandlers
 import WavHandler
 import NeuralNetwork
-from VAEEngine import VAE, encode_data_in_chunks
+from VAEEngine import VAE
 import torch
 from torch import optim
-from torch.nn import functional as F
-import numpy as np
-import matplotlib.pyplot as plt
 
-# Parameters
+''' PARAMETERS '''
+# Input clip settings
 do_slice = False
 do_train_VAE = True
 num_epochs_VAE = 1
 do_train_transformer = True
+
+# Transformer settings
 num_epochs_transformer = 1
 do_generate = False
+
+# Common training
 train_percentage = 20
-vae_chunk_size = 1000  # Adjust this value based on your memory capacity
+hidden_layer_constant = 1
+latent_dim_vae = 40
+
+# Output paths
 clip_output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
 generated_output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Generated"
 model_folder = "D:\\University\\Thesis\\FittedModel"
+
+''' ENVIRONMENT SETUPS '''
 
 # Check if CUDA is available
 if torch.cuda.is_available():
@@ -37,68 +47,28 @@ else:
 # Prepare network variables
 ntoken = int(FolderHandlers.count_wavs_in_folder(clip_output_folder) * train_percentage / 100)
 ninp = WavHandler.length_of_a_clip(clip_output_folder)
-hidden_layer_constant = 1
+
+''' CLIP PREPARATION AND TRAINING '''
 
 # Slice audio clips, train VAE and save encoded data
 if do_slice:
     WavHandler.prepare_slices(0.01, 0, 24000)
-
-    # Initialize VAE
-    vae = VAE(input_dim=ninp, hidden_dim=hidden_layer_constant, latent_dim=ntoken).to(device)
-    vae_optimizer = optim.Adam(vae.parameters())
-
-    if do_train_VAE:
-        # Train VAE on audio clips
-        for epoch in range(num_epochs_VAE):
-            for data in WavHandler.load_unquantised_samples_generator(percentage=train_percentage):
-                data = torch.tensor(data, dtype=torch.float32).unsqueeze(0).to(device)
-                vae_optimizer.zero_grad()
-                reconstructed_data, mu, logvar = vae(data)
-                loss = VAE.loss_function(reconstructed_data, data, mu, logvar)
-                loss.backward()
-                vae_optimizer.step()
-
-    # Save VAE
-    torch.save(vae.state_dict(), 'vae.pth')
-
-    # Encode all data and save encoded values
-    all_data = WavHandler.load_unquantised_samples_generator(percentage=100)
-    encoded_data_generator = encode_data_in_chunks(vae, all_data, vae_chunk_size, device)
-
-    for i, encoded_data_chunk in enumerate(encoded_data_generator):
-        torch.save(encoded_data_chunk, f'encoded_data_chunk_{i}.pth')
-
-
+    VAEEngine.retrain_VAE(ninp, hidden_layer_constant, latent_dim_vae, device, do_train_VAE, num_epochs_VAE,
+                          train_percentage, model_folder)
 elif do_train_VAE:
-    # Initialize VAE
-    vae = VAE(input_dim=ninp, hidden_dim=hidden_layer_constant, latent_dim=ntoken).to(device)
-    vae_optimizer = optim.Adam(vae.parameters())
+    VAEEngine.retrain_VAE(ninp, hidden_layer_constant, ntoken, device, do_train_VAE, num_epochs_VAE, train_percentage,
+                          model_folder)
 
-    # Train VAE on audio clips
-    for epoch in range(num_epochs_VAE):
-        for data in WavHandler.load_unquantised_samples_generator(percentage=train_percentage):
-            data = torch.tensor(data[0]).to(device)
-            vae_optimizer.zero_grad()
-            reconstructed_data, mu, logvar = vae(data)
-            loss = VAE.loss_function(reconstructed_data, data, mu, logvar)
-            loss.backward()
-            vae_optimizer.step()
+''' TRANSFORMER TRAINING '''
 
-    # Save VAE
-    torch.save(vae.state_dict(), 'vae.pth')
-
-    # Encode all data and save encoded values
-    all_data = WavHandler.load_unquantised_samples_generator(percentage=100)
-    encoded_data_generator = encode_data_in_chunks(vae, all_data, vae_chunk_size, device)
-
-    for i, encoded_data_chunk in enumerate(encoded_data_generator):
-        torch.save(encoded_data_chunk, f'encoded_data_chunk_{i}.pth')
-
+# Train transformer model
 if do_train_transformer:
     # Load encoded data
-    encoded_data = torch.load('encoded_data.pth')
+    encoded_data_files = sorted(
+        [f for f in os.listdir(model_folder) if f.startswith('encoded_data_') and f.endswith('.npy')])
 
-    transformer_model = NeuralNetwork.transformer_model(ntoken, ninp, 2, hidden_layer_constant, 1)
+    # Initialize transformer model
+    transformer_model = NeuralNetwork.transformer_model(ntoken, latent_dim_vae, 2, hidden_layer_constant, 1)
     optimizer = optim.Adam(transformer_model.parameters())
 
     # Move your model to the chosen device
@@ -106,45 +76,36 @@ if do_train_transformer:
 
     history = {'loss': []}
 
+    # Train the model
     for epoch in range(num_epochs_transformer):
         print(f"Starting epoch {epoch + 1}")
-        # Prepare training data
-        quantised_samples_generator = WavHandler.load_quantised_samples_generator(percentage=train_percentage)
 
-        for encoded_train_data, encoded_train_labels in encoded_data:
-            # Reshape data if necessary, for example if your model expects a certain shape
-            data = torch.tensor(encoded_train_data, dtype=torch.float32).unsqueeze(0).to(device)
-            labels = torch.tensor(encoded_train_labels, dtype=torch.float32).unsqueeze(0).to(device)
+        # Load encoded data in chunks
+        for encoded_data_file in encoded_data_files:
+            # Load encoded data
+            encoded_data_chunks = np.load(os.path.join(model_folder, encoded_data_file))
 
-            # Move your data to the chosen device
-            data = data.to(device)
-            labels = labels.to(device)
+            # Train the model on each clip
+            for encoded_data_chunk in encoded_data_chunks:
+                NeuralNetwork.single_epoch_train(encoded_data_chunk, transformer_model, optimizer, history, device,
+                                                 epoch)
 
-            # Train the model on the data
-            optimizer.zero_grad()
-            outputs = transformer_model(data)
-            outputs = outputs[:, -1, :]
-            loss = F.mse_loss(outputs, labels)
-            loss.backward()
-            optimizer.step()
-
-            # Append the loss of the current epoch to the history
-            history['loss'].append(loss.item())
-
-        # Save the model
+        # Save the model and plot after each epoch
         FolderHandlers.save_model_with_version(model=transformer_model, directory=model_folder,
                                                base_filename="fitted_model")
         NeuralNetwork.save_training_plot(history=history, model_folder=model_folder, do_show=False)
 
-    # Save the model
+    # Save the model and plot after the last epoch
     FolderHandlers.save_model_with_version(model=transformer_model, directory=model_folder,
                                            base_filename="fitted_model")
 
     NeuralNetwork.save_training_plot(history=history, model_folder=model_folder, do_show=False)
 
+''' GENERATE OUTPUT '''
+
 trained_model = FolderHandlers.get_latest_model(directory=model_folder, base_filename="fitted_model")
 
-if(do_generate):
+if do_generate:
     print("Generating output.")
 
     # Load VAE
@@ -152,7 +113,7 @@ if(do_generate):
     vae.load_state_dict(torch.load('vae.pth'))
 
     # Prepare test data
-    test_data = WavHandler.load_unquantised_samples_generator(percentage=10)
+    test_data = WavHandler.load_samples_generator(percentage=10)
 
     # Encode test data using VAE
     encoded_test_data = vae.encode(torch.tensor(test_data, dtype=torch.float32).unsqueeze(0).to(device))
@@ -160,7 +121,7 @@ if(do_generate):
     # Generate output
     generated_sequence = NeuralNetwork.generate_sequence(model=trained_model, start_sequence=encoded_test_data,
                                                          length=400,
-                                                         lookback=500)
+                                                         lookback=500, vae_model=vae)
 
     # Decode generated sequence using VAE
     decoded_generated_sequence = vae.decode(generated_sequence)
@@ -168,4 +129,5 @@ if(do_generate):
     WavHandler.create_dequantised_output(quantised_sequence=decoded_generated_sequence,
                                          directory=generated_output_folder,
                                          file_name="generated_output", num_bins=65535)
-    print("Generated output saved.")
+    
+    print("Generated output saved to " + generated_output_folder)

@@ -5,8 +5,9 @@ import numpy as np
 import soundfile as sf
 import FolderHandlers
 
+
 class AudioSlicer:
-    def __init__(self, file_path, output_folder_path, clip_length_second, overlay_second=0, sample_rate = 8000):
+    def __init__(self, file_path, output_folder_path, clip_length_second, overlay_second=0, sample_rate=8000):
         self.file_path = file_path
         self.output_folder_path = output_folder_path
         self.clip_length_second = clip_length_second
@@ -42,6 +43,7 @@ class AudioSlicer:
 
         return output_files
 
+
 def prepare_slices(clip_length_sec, overlay_sec, sample_rate):
     print("Starting slicing of input samples. This may take a while.")
     # Usage
@@ -56,6 +58,7 @@ def prepare_slices(clip_length_sec, overlay_sec, sample_rate):
 
     print("Finished slicing samples.")
 
+
 def length_of_a_clip(path):
     for filename in os.listdir(path):
         # Check if the file is a .wav file
@@ -63,19 +66,21 @@ def length_of_a_clip(path):
             audio, sr = librosa.load(f"{path}\\{filename}", sr=None)
             return len(audio)
 
+
 def return_slices(percentage):
     output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
     number_of_wavs = FolderHandlers.count_wavs_in_folder(output_folder)
     wavs = []
     for file in os.listdir(output_folder):
-        if(len(wavs)<int(percentage/100*number_of_wavs)):
+        if (len(wavs) < int(percentage / 100 * number_of_wavs)):
             wavs.append(librosa.load(f"{output_folder}\\{file}", sr=None)[0])
         else:
             break
 
     return wavs
 
-def create_dequantised_output(quantised_sequence, directory, file_name, num_bins=1024, sample_rate = 24000):
+
+def create_dequantised_output(quantised_sequence, directory, file_name, num_bins=1024, sample_rate=24000):
     """Dequantise a sequence."""
     # Convert the quantised values back to the range [-1.0, 1.0]
     dequantised_sequence = (quantised_sequence / (num_bins - 1)) * 2.0 - 1.0
@@ -83,14 +88,20 @@ def create_dequantised_output(quantised_sequence, directory, file_name, num_bins
     # Save the dequantised sequence as a .wav file
     sf.write(f'{directory}\\{file_name}.wav', dequantised_sequence.flatten(), samplerate=sample_rate)
 
+
+def save_generated_output(sequence, directory, file_name, num_bins=1024, sample_rate=24000):
+    sf.write(f'{directory}\\{file_name}.wav', sequence.flatten(), samplerate=sample_rate)
+
+
 def load_quantised_samples_generator(percentage):
     print("Loading training data.")
     output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
     number_of_wavs = FolderHandlers.count_wavs_in_folder(output_folder)
-    num_samples = int(percentage/100*number_of_wavs)
+    num_samples = int(percentage / 100 * number_of_wavs)
 
     files = os.listdir(output_folder)
-    for i in tqdm(range(num_samples - 1), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):  # subtract 1 to avoid index out of range for next file
+    for i in tqdm(range(num_samples - 1),
+                  bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):  # subtract 1 to avoid index out of range for next file
         current_file = files[i]
         next_file = files[i + 1]
 
@@ -103,14 +114,16 @@ def load_quantised_samples_generator(percentage):
 
         yield quantised_current_audio, quantised_next_audio
 
-def load_unquantised_samples_generator(percentage):
-    print("Loading training data.")
+
+def load_samples_generator(percentage):
+    print("Loading music clips with yield")
     output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
     number_of_wavs = FolderHandlers.count_wavs_in_folder(output_folder)
-    num_samples = int(percentage/100*number_of_wavs)
+    num_samples = int(percentage / 100 * number_of_wavs)
 
     files = os.listdir(output_folder)
-    for i in tqdm(range(num_samples - 1), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):  # subtract 1 to avoid index out of range for next file
+    for i in tqdm(range(num_samples - 1),
+                  bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):  # subtract 1 to avoid index out of range for next file
         current_file = files[i]
         next_file = files[i + 1]
 
@@ -121,13 +134,15 @@ def load_unquantised_samples_generator(percentage):
         if np.nanmax(current_audio) == np.nanmin(current_audio):
             current_audio = current_audio.clip(0, 1)
         else:
-            current_audio = (current_audio - np.nanmin(current_audio)) / (np.nanmax(current_audio) - np.nanmin(current_audio))
+            current_audio = (current_audio - np.nanmin(current_audio)) / (
+                        np.nanmax(current_audio) - np.nanmin(current_audio))
         if np.nanmax(next_audio) == np.nanmin(next_audio):
             next_audio = next_audio.clip(0, 1)
         else:
             next_audio = (next_audio - np.nanmin(next_audio)) / (np.nanmax(next_audio) - np.nanmin(next_audio))
 
         yield current_audio, next_audio
+
 
 def load_quantised_samples(percentage):
     print("Loading data.")
@@ -137,7 +152,8 @@ def load_quantised_samples(percentage):
 
     files = os.listdir(output_folder)
     quantised_samples = []
-    for i in tqdm(range(num_samples - 1), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):  # subtract 1 to avoid index out of range for next file
+    for i in tqdm(range(num_samples - 1),
+                  bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):  # subtract 1 to avoid index out of range for next file
         current_file = files[i]
 
         current_audio = librosa.load(f"{output_folder}\\{current_file}", sr=24000)[0]

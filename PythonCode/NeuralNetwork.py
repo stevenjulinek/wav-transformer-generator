@@ -33,18 +33,16 @@ class TransformerBlock(nn.Module):
 class transformer_model(nn.Module):
     def __init__(self, ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
         super(transformer_model, self).__init__()
-        self.embedding = nn.Embedding(ntoken, ninp)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(ninp, nhead, nhid, dropout) for _ in range(nlayers)])
         self.avg_pooling = nn.AdaptiveAvgPool1d(1)
         self.output = nn.Linear(nhid, ninp)
 
     def forward(self, x):
-        x = self.embedding(x)
         for transformer_block in self.transformer_blocks:
             x = transformer_block(x)
         x = self.avg_pooling(x)
         x = self.output(x)
-        return x[:, -240:]  # return only the last 240 samples
+        return x
 
 
 def generate_sequence(model, start_sequence, length, lookback, vae_model):
@@ -99,3 +97,25 @@ def save_training_plot(history, model_folder, do_show=False):
     # Save the plot
     next_version = FolderHandlers.find_highest_version(base_filename="loss_plot", directory=model_folder) + 1
     plt.savefig(model_folder + 'loss_plot_' + str(next_version) + '.png')
+
+def single_epoch_train(encoded_data_chunk, transformer_model, optimizer, history, device, i):
+    encoded_train_data = encoded_data_chunk[0, i, 0, :]
+    encoded_train_labels = encoded_data_chunk[0, i, 1, :]
+
+    # Reshape data if necessary, for example if your model expects a certain shape
+    data = torch.tensor(encoded_train_data, dtype=torch.float32).unsqueeze(0).to(device)
+    labels = torch.tensor(encoded_train_labels, dtype=torch.float32).unsqueeze(0).to(device)
+
+    # Move your data to the chosen device
+    data = data.to(device)
+    labels = labels.to(device)
+
+    # Train the model on the data
+    optimizer.zero_grad()
+    outputs = transformer_model(data)
+    loss = F.mse_loss(outputs, labels)
+    loss.backward()
+    optimizer.step()
+
+    # Append the loss of the current epoch to the history
+    history['loss'].append(loss.item())
