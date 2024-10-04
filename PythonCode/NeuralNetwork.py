@@ -34,7 +34,7 @@ class transformer_model(nn.Module):
     def __init__(self, ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
         super(transformer_model, self).__init__()
         self.transformer_blocks = nn.ModuleList([TransformerBlock(ninp, nhead, nhid, dropout) for _ in range(nlayers)])
-        self.avg_pooling = nn.AdaptiveAvgPool1d(1)
+        self.avg_pooling = nn.AdaptiveAvgPool1d(nhid)
         self.output = nn.Linear(nhid, ninp)
 
     def forward(self, x):
@@ -53,27 +53,22 @@ def generate_sequence(model, start_sequence, length, lookback, vae_model):
     start_time = time.time()
 
     sequence = start_sequence[-lookback:]
-    # Convert the sequence list to a numpy array
-    sequence = np.array(sequence)
 
-    # Generate the desired number of outputs
-    for _ in tqdm(range(length), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):
-        # Make a prediction based on the current sequence
-        prediction = model(sequence, verbose=0, batch_size=1)
-
-        # Convert the prediction to integer
-        prediction = prediction.astype(int)
-
-        prediction = torch.tensor(prediction)
-
-        # Reshape the last prediction to a 1D array with a single element
-        prediction = np.reshape(prediction[-1], (1, 240))
-
-        # Append the prediction to the sequence
-        sequence = np.concatenate((sequence, prediction), axis=0)
-
-        # Use only the last part of the sequence for the next input
-        sequence = sequence[-lookback:]
+    # # Generate the desired number of outputs
+    # for _ in tqdm(range(length), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):
+    #     # Make a prediction based on the current sequence
+    #     prediction = model(sequence)
+    #
+    #     # Reshape the last prediction to a 1D array with a single element
+    #     prediction = prediction[-1].unsqueeze(0)
+    #
+    #     # Create a new sequence by appending the prediction to the sequence
+    #     new_sequence = torch.cat((sequence, prediction), dim=0)
+    #
+    #     # Use only the last part of the new sequence for the next input
+    #     sequence = new_sequence[-lookback:]
+    #
+    #     torch.cuda.empty_cache()
 
     # Decode the generated sequence using the VAE
     decoded_sequence = vae_model.decode(sequence)
@@ -98,17 +93,17 @@ def save_training_plot(history, model_folder, do_show=False):
     next_version = FolderHandlers.find_highest_version(base_filename="loss_plot", directory=model_folder) + 1
     plt.savefig(model_folder + 'loss_plot_' + str(next_version) + '.png')
 
-def single_epoch_train(encoded_data_chunk, transformer_model, optimizer, history, device, i):
-    encoded_train_data = encoded_data_chunk[0, i, 0, :]
-    encoded_train_labels = encoded_data_chunk[0, i, 1, :]
+def single_epoch_train(encoded_data, encoded_data_label, transformer_model, optimizer, history, device, index):
+    # Check if index + 1 is within the bounds of the array
+    if index + 1 >= len(encoded_data_label):
+        return
+
+    encoded_train_data = encoded_data
+    encoded_train_labels = encoded_data_label[index + 1]
 
     # Reshape data if necessary, for example if your model expects a certain shape
-    data = torch.tensor(encoded_train_data, dtype=torch.float32).unsqueeze(0).to(device)
-    labels = torch.tensor(encoded_train_labels, dtype=torch.float32).unsqueeze(0).to(device)
-
-    # Move your data to the chosen device
-    data = data.to(device)
-    labels = labels.to(device)
+    data = torch.tensor(encoded_train_data, dtype=torch.float32).view(1, -1).to(device)
+    labels = torch.tensor(encoded_train_labels, dtype=torch.float32).view(1, -1).to(device)
 
     # Train the model on the data
     optimizer.zero_grad()

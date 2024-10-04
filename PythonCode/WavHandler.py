@@ -89,9 +89,16 @@ def create_dequantised_output(quantised_sequence, directory, file_name, num_bins
     sf.write(f'{directory}\\{file_name}.wav', dequantised_sequence.flatten(), samplerate=sample_rate)
 
 
-def save_generated_output(sequence, directory, file_name, num_bins=1024, sample_rate=24000):
-    sf.write(f'{directory}\\{file_name}.wav', sequence.flatten(), samplerate=sample_rate)
+def save_generated_output(sequence, directory, file_name, sample_rate=24000):
+    sf.write(f'{directory}\\{file_name}.wav', sequence.detach().cpu().numpy().flatten(), samplerate=sample_rate)
 
+def load_samples(num_samples, directory):
+    files = os.listdir(directory)
+    samples = []
+    for i in range(num_samples):
+        audio = librosa.load(f"{directory}\\{files[i]}", sr=24000)[0]
+        samples.append(audio)
+    return samples
 
 def load_quantised_samples_generator(percentage):
     print("Loading training data.")
@@ -143,7 +150,26 @@ def load_samples_generator(percentage):
 
         yield current_audio, next_audio
 
+def load_samples_generator_batches(percentage, batch_size):
+    print("Loading music clips in batches with yield")
+    output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
+    all_files = os.listdir(output_folder)
+    num_files = len(all_files)
+    num_train = int(num_files * percentage / 100)
 
+    # Yield batches of files
+    for i in tqdm(range(0, num_train, batch_size), bar_format='\033[37m{l_bar}{bar:40}{r_bar}\033[0m'):
+        batch_files = all_files[i:i + batch_size]
+        batch_data = []
+        for file in batch_files:
+            audio = librosa.load(f"{output_folder}\\{file}", sr=24000)[0]
+            # Normalize the values to the [0, 1] range
+            if np.nanmax(audio) == np.nanmin(audio):
+                audio = audio.clip(0, 1)
+            else:
+                audio = (audio - np.nanmin(audio)) / (np.nanmax(audio) - np.nanmin(audio))
+            batch_data.append(audio)
+        yield batch_data
 def load_quantised_samples(percentage):
     print("Loading data.")
     output_folder = "C:\\Users\\STEVE\\OneDrive\\Documents\\University\\Diploma work\\Code\\MusicData\\Clips"
@@ -164,3 +190,9 @@ def load_quantised_samples(percentage):
         quantised_samples.append(quantised_current_audio)
 
     return quantised_samples
+
+def pad_sequences(sequences):
+    max_length = max(len(seq) for seq in sequences)
+    padded_sequences = [np.concatenate((seq, np.zeros(max_length - len(seq)))) for seq in sequences]
+    return padded_sequences
+
